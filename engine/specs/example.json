@@ -1,0 +1,26 @@
+{
+    "pages": [
+        {
+            "id": "page_home",
+            "route": "/",
+            "sections": [
+                {
+                    "id": "sec_home_hero_1",
+                    "kind": "hero"
+                },
+                {
+                    "id": "sec_home_features_2",
+                    "kind": "features"
+                },
+                {
+                    "id": "sec_home_pricing_3",
+                    "kind": "pricing"
+                },
+                {
+                    "id": "sec_home_footer_4",
+                    "kind": "footer"
+                }
+            ]
+        }
+    ]
+}
