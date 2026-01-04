@@ -1,3 +1,4 @@
+import { Button } from "@/components/ui/button";
 interface HeroSplitProps {
   title: string;
   subtitle: string;
@@ -17,9 +18,9 @@ const HeroSplit = ({ title, subtitle }: HeroSplitProps) => {
               {subtitle}
             </p>
             {/* Optional: CTA */}
-            <button className="mt-8 px-6 py-3 rounded-lg bg-black dark:bg-white text-white dark:text-black font-semibold shadow hover:scale-105 transition">
+            <Button variant="default" className="mt-8">
               Get Started
-            </button>
+            </Button>
           </div>
           {/* Right side: image/illustration */}
           <div className="w-full lg:w-1/2 flex items-center justify-center">

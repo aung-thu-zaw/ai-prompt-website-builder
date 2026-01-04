@@ -1,4 +1,8 @@
 {
+    "theme": {
+        "primaryColor": "#ff452c",
+        "font": "Anton"
+    },
     "pages": [
         {
             "id": "page_home",

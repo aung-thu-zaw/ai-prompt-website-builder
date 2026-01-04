@@ -1,66 +1,7 @@
 import fs from "fs";
 import path from "path";
-
-type ExportStyle = "default" | "named";
-
-type WebsiteSpec = {
-  pages: {
-    id: string;
-    route: string;
-    sections: {
-      id: string;
-      kind: string;
-      variant?: string;
-      content?: Record<string, unknown>;
-    }[];
-  }[];
-};
-
-const SECTION_COMPONENT_MAP: Record<string, Record<string, string>> = {
-  hero: {
-    default: "HeroDefault",
-    split: "HeroSplit",
-  },
-  features: {
-    default: "Features",
-  },
-  pricing: {
-    default: "Pricing",
-  },
-  footer: {
-    default: "Footer",
-  },
-};
-
-/**
- * Gets the component name for a given section kind and variant.
- *
- * Looks up the component name from SECTION_COMPONENT_MAP based on the section's
- * kind and variant. If no variant is specified, defaults to "default".
- * Throws an error if the kind or variant doesn't exist in the mapping.
- *
- * @param {string} kind - The section kind (e.g., "hero", "features").
- * @param {string | undefined} variant - The section variant (e.g., "default", "split").
- * @returns {string} The component name for the given kind and variant.
- */
-const getComponentName = (kind: string, variant?: string): string => {
-  const variantMap = SECTION_COMPONENT_MAP[kind];
-  if (!variantMap) {
-    throw new Error(`Unknown section kind: ${kind}`);
-  }
-
-  const variantKey = variant || "default";
-  const componentName = variantMap[variantKey];
-  if (!componentName) {
-    throw new Error(
-      `Unknown variant "${variantKey}" for section kind "${kind}". Available variants: ${Object.keys(
-        variantMap
-      ).join(", ")}`
-    );
-  }
-
-  return componentName;
-};
+import { WebsiteSpec, ExportStyle } from "@/types/website-spec";
+import { SECTION_COMPONENTS } from "@/engine/config/components";
 
 /**
  * Determines the export style of a given component file by inspecting its content.
@@ -76,7 +17,7 @@ const getComponentName = (kind: string, variant?: string): string => {
  * @param {string} componentPath - The absolute path to the component file to be analyzed.
  * @returns {ExportStyle} Returns "default" if a default export is detected, otherwise "named".
  */
-const detectExportStyle = (componentPath: string): ExportStyle => {
+const detectComponentExportStyle = (componentPath: string): ExportStyle => {
   try {
     const content = fs.readFileSync(componentPath, "utf-8");
 
@@ -116,7 +57,7 @@ const detectExportStyle = (componentPath: string): ExportStyle => {
  * @param {ExportStyle} exportStyle - Enum ("default" or "named") reflecting how the component is exported.
  * @returns {string} The full ES module import statement for the component.
  */
-const generateImport = (
+const generateComponentImportStatement = (
   componentName: string,
   componentPath: string,
   exportStyle: ExportStyle
@@ -128,6 +69,42 @@ const generateImport = (
   } else {
     return `import { ${componentName} } from "${importPath}";`;
   }
+};
+
+/**
+ * Gets the component name for a given section component kind and specific variant.
+ *
+ * Looks up the component name from SECTION_COMPONENTS based on the section component's
+ * kind and specific variant. If no specific variant is specified, defaults to "default".
+ * Throws an error if the kind or specific variant doesn't exist in the SECTION_COMPONENTS configuration.
+ *
+ * @param {string} kind - The section component kind (e.g., "hero", "features").
+ * @param {string | undefined} variant - The section component specific variant (e.g., "default", "split", etc...).
+ * @returns {string} The component name for the given section component kind and specific variant.
+ */
+const getSectionComponentName = (kind: string, variant?: string): string => {
+  const component = SECTION_COMPONENTS[kind];
+
+  if (!component) {
+    throw new Error(
+      `Encountered unsupported section component kind: "${kind}". ` +
+        `Please ensure that "${kind}" is registered in SECTION_COMPONENTS configuration.`
+    );
+  }
+
+  const variantKey = variant || "default";
+
+  const componentName = component[variantKey];
+
+  if (!componentName) {
+    throw new Error(
+      `The variant "${variantKey}" specified for section kind "${kind}" is not recognized. Please ensure you are using one of the supported variants: ${Object.keys(
+        component
+      ).join(", ")}.`
+    );
+  }
+
+  return componentName;
 };
 
 /**
@@ -143,13 +120,12 @@ const generateImport = (
  * @param {unknown} value - The value to serialize.
  * @returns {string} The JSX prop value representation.
  */
-const serializePropValue = (value: unknown): string => {
+const serializeJsxPropValue = (value: unknown): string => {
   if (value === null || value === undefined) {
     return "";
   }
 
   if (typeof value === "string") {
-    // Escape quotes and backslashes for JSX string props
     const escaped = value.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
     return `"${escaped}"`;
   }
@@ -159,70 +135,101 @@ const serializePropValue = (value: unknown): string => {
   }
 
   if (Array.isArray(value)) {
-    // Use JSON.stringify for proper escaping, then wrap in JSX expression
     return `{${JSON.stringify(value)}}`;
   }
 
   if (typeof value === "object") {
-    // Use JSON.stringify for proper escaping, then wrap in JSX expression
     return `{${JSON.stringify(value)}}`;
   }
 
-  // Fallback: convert to string
   return `"${String(value)}"`;
 };
 
 /**
- * Converts a content object to JSX props string.
+ * Converts a content object to a JSX props string representation.
  *
  * Takes a record of key-value pairs and generates a space-separated string
- * of JSX props in the format `key={value}` or `key="value"`.
+ * of JSX prop strings in the format `key={value}` or `key="value"`.
  *
  * @param {Record<string, unknown>} content - The content object to convert.
  * @returns {string} A string of JSX props, e.g., `title="Hello" items={["a", "b"]}`.
  */
-const contentToProps = (content: Record<string, unknown>): string => {
+const contentToJsxProps = (content: Record<string, unknown>): string => {
   return Object.entries(content)
     .map(([key, value]) => {
-      const serialized = serializePropValue(value);
+      const serialized = serializeJsxPropValue(value);
+
       if (!serialized) {
         return "";
       }
+
       return `${key}=${serialized}`;
     })
     .filter(Boolean)
     .join(" ");
 };
 
+/**
+ * Generates a Next.js (App Router) page source file from a given WebsiteSpec object.
+ *
+ * This function processes the provided `WebsiteSpec`, extracting the first page definition,
+ * collecting unique React component imports for each section, serializing content to JSX props,
+ * composing the page's main content, and writing a fully-formed `.tsx` file for use in a Next.js (App Router) project.
+ *
+ * The resulting file includes:
+ *   - Proper, deduplicated component imports based on each section's kind and variant,
+ *   - JSX code for each section, with serialized props,
+ *   - A complete `Page` React component ready to be consumed by Next.js (App Router).
+ *
+ * Export styles of components are auto-detected (default or named), ensuring valid import statements.
+ *
+ * @param {WebsiteSpec} spec - The website specification describing pages and their sections.
+ *
+ * @throws {Error} If a section's kind or variant is unsupported or missing from SECTION_COMPONENTS configuration.
+ * @sideeffect Writes (overwrites) `templates/next-js/app/page.tsx` with the generated content.
+ */
 export const generate = (spec: WebsiteSpec): void => {
   const page = spec.pages[0]; // v1: single page only
 
-  // Collect unique imports using a Map keyed by component name
+  /**
+   * Collect a map of unique component import statements,
+   * keyed by component name, to avoid duplicate imports.
+   */
   const importsMap = new Map<string, string>();
 
   page.sections.forEach((section) => {
-    const componentName = getComponentName(section.kind, section.variant);
+    const componentName = getSectionComponentName(
+      section.kind,
+      section.variant
+    );
 
-    // Skip if already processed (deduplication)
+    // Skip if already processed (avoid duplicate imports)
     if (importsMap.has(componentName)) {
       return;
     }
 
+    // Resolve absolute path for component file
     const componentPath = path.join(
       process.cwd(),
       "templates/next-js/components/sections",
       `${componentName}.tsx`
     );
-    const exportStyle = detectExportStyle(componentPath);
+    // Detect export style (default or named) for proper import statement
+    const exportStyle = detectComponentExportStyle(componentPath);
+    // Construct import path as used in app source code (alias-based)
     const importPath = `@/components/sections/${componentName}`;
 
+    // Generate and register import statement
     importsMap.set(
       componentName,
-      generateImport(componentName, importPath, exportStyle)
+      generateComponentImportStatement(componentName, importPath, exportStyle)
     );
   });
 
-  // Sort imports deterministically by component name
+  /**
+   * Sort imports in a deterministic order (by component name)
+   * for a stable and clear generated output.
+   */
   const imports = Array.from(importsMap.values())
     .sort((a, b) => {
       // Extract component name from import statement for sorting
@@ -232,14 +239,25 @@ export const generate = (spec: WebsiteSpec): void => {
     })
     .join("\n");
 
+  /**
+   * Generate the main body JSX by mapping each section
+   * to its corresponding component with serialized props.
+   */
   const body = page.sections
     .map((section) => {
-      const componentName = getComponentName(section.kind, section.variant);
-      const props = section.content ? contentToProps(section.content) : "";
+      const componentName = getSectionComponentName(
+        section.kind,
+        section.variant
+      );
+      const props = section.content ? contentToJsxProps(section.content) : "";
       return props ? `<${componentName} ${props} />` : `<${componentName} />`;
     })
     .join("\n      ");
 
+  /**
+   * Compose the full TypeScript/JSX source for the page,
+   * including imports and the default exported Page component.
+   */
   const pageSource = `// AUTO-GENERATED FILE — DO NOT EDIT
 // Generated from WebsiteSpec
 
@@ -254,7 +272,9 @@ export default function Page() {
 }
 `;
 
+  // Determine output .tsx path in the Next.js app directory
   const outputPath = path.join(process.cwd(), "templates/next-js/app/page.tsx");
 
+  // Write the generated file to disk, overwriting if necessary
   fs.writeFileSync(outputPath, pageSource, "utf-8");
 };
