@@ -1,4 +1,8 @@
 {
+    "project": {
+        "name": "AI Powered Website Builder",
+        "slug": "ai-powered-website-builder"
+    },
     "architecture": "landing",
     "theme": {
         "primaryColor": "#ff452c",

@@ -1,6 +1,14 @@
 import { ArchitecturePreset } from "@/types/architecture";
 
 /**
+ * Project configuration for the website.
+ */
+export interface ProjectConfig {
+  name: string;
+  slug: string;
+}
+
+/**
  * Theme configuration for the website.
  */
 export interface ThemeConfig {
@@ -32,6 +40,7 @@ export interface PageConfig {
  * This is the root type for the JSON specification file for the website code generator.
  */
 export interface WebsiteSpec {
+  project?: ProjectConfig;
   architecture?: ArchitecturePreset;
   theme?: ThemeConfig;
   pages: PageConfig[];

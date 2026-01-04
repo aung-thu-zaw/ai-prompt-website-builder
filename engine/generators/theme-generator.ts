@@ -295,18 +295,21 @@ const updateLayout = (fontName: string, outputPath: string): void => {
  * Generates theme configuration by updating globals.css and layout.tsx.
  *
  * @param {WebsiteSpec} spec - The website specification containing theme config.
+ * @param {string} outputDir - The output directory where the generated project is located.
  */
-export const generate = (spec: WebsiteSpec): void => {
-  const templatesPath = path.join(process.cwd(), "templates/next-js");
+export const generate = (spec: WebsiteSpec, outputDir: string): void => {
+  if (!spec.theme) {
+    return;
+  }
 
   // Update globals.css with primary color
-  const globalsCssPath = path.join(templatesPath, "app/globals.css");
+  const globalsCssPath = path.join(outputDir, "app/globals.css");
   if (fs.existsSync(globalsCssPath)) {
     updateGlobalsCss(spec.theme.primaryColor, globalsCssPath);
   }
 
   // Update layout.tsx with font
-  const layoutPath = path.join(templatesPath, "app/layout.tsx");
+  const layoutPath = path.join(outputDir, "app/layout.tsx");
   if (fs.existsSync(layoutPath)) {
     updateLayout(spec.theme.font, layoutPath);
   }

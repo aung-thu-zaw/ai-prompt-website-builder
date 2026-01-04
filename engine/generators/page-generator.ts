@@ -186,11 +186,12 @@ const contentToJsxProps = (content: Record<string, unknown>): string => {
  * Export styles of components are auto-detected (default or named), ensuring valid import statements.
  *
  * @param {WebsiteSpec} spec - The website specification describing pages and their sections.
+ * @param {string} outputDir - The output directory where the generated project is located.
  *
  * @throws {Error} If a section's kind or variant is unsupported or missing from SECTION_COMPONENTS configuration.
- * @sideeffect Writes (overwrites) `templates/next-js/app/page.tsx` with the generated content.
+ * @sideeffect Writes (overwrites) `app/page.tsx` in the output directory with the generated content.
  */
-export const generate = (spec: WebsiteSpec): void => {
+export const generate = (spec: WebsiteSpec, outputDir: string): void => {
   const page = spec.pages[0]; // v1: single page only
 
   // Get architecture preset (default to "landing" if not specified)
@@ -214,12 +215,14 @@ export const generate = (spec: WebsiteSpec): void => {
       return;
     }
 
-    const componentPath = path.join(
+    // Read component from template to detect export style
+    const templateComponentPath = path.join(
       process.cwd(),
       "templates/next-js/components",
       architectureStrategy.folder,
       `${componentName}.tsx`
     );
+    const componentPath = templateComponentPath;
     const exportStyle = detectComponentExportStyle(componentPath);
     const importPath = architectureStrategy.importPath(componentName);
 
@@ -276,8 +279,8 @@ export default function Page() {
 }
 `;
 
-  // Determine output .tsx path in the Next.js app directory
-  const outputPath = path.join(process.cwd(), "templates/next-js/app/page.tsx");
+  // Determine output .tsx path in the output directory
+  const outputPath = path.join(outputDir, "app/page.tsx");
 
   // Write the generated file to disk, overwriting if necessary
   fs.writeFileSync(outputPath, pageSource, "utf-8");
