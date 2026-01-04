@@ -6,19 +6,40 @@
             "sections": [
                 {
                     "id": "sec_home_hero_1",
-                    "kind": "hero"
+                    "kind": "hero",
+                    "content": {
+                        "title": "Build faster with AI",
+                        "subtitle": "Generate production-ready websites from a single prompt"
+                    }
                 },
                 {
                     "id": "sec_home_features_2",
-                    "kind": "features"
+                    "kind": "features",
+                    "content": {
+                        "items": [
+                            "Prompt-based generation",
+                            "Deterministic output",
+                            "Production-ready code"
+                        ]
+                    }
                 },
                 {
                     "id": "sec_home_pricing_3",
-                    "kind": "pricing"
+                    "kind": "pricing",
+                    "content": {
+                        "plans": [
+                            "Free",
+                            "Pro",
+                            "Enterprise"
+                        ]
+                    }
                 },
                 {
                     "id": "sec_home_footer_4",
-                    "kind": "footer"
+                    "kind": "footer",
+                    "content": {
+                        "copyright": "© 2026 AI Builder"
+                    }
                 }
             ]
         }

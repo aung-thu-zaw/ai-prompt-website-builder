@@ -9,10 +9,10 @@ import Pricing from "@/components/sections/Pricing";
 export default function Page() {
   return (
     <main>
-      <Hero />
-      <Features />
-      <Pricing />
-      <Footer />
+      <Hero title="Build faster with AI" subtitle="Generate production-ready websites from a single prompt" />
+      <Features items={["Prompt-based generation","Deterministic output","Production-ready code"]} />
+      <Pricing plans={["Free","Pro","Enterprise"]} />
+      <Footer copyright="© 2026 AI Builder" />
     </main>
   );
 }
