@@ -1,9 +1,4 @@
-/**
- * Type definitions for the website specification schema.
- * Defines the structure of the input JSON specification used to generate websites.
- */
-
-export type ExportStyle = "default" | "named";
+import { ArchitecturePreset } from "@/types/architecture";
 
 /**
  * Theme configuration for the website.
@@ -34,9 +29,10 @@ export interface PageConfig {
 
 /**
  * Complete website specification schema.
- * This is the root type for the JSON specification file.
+ * This is the root type for the JSON specification file for the website code generator.
  */
 export interface WebsiteSpec {
-  theme: ThemeConfig;
+  architecture?: ArchitecturePreset;
+  theme?: ThemeConfig;
   pages: PageConfig[];
 }

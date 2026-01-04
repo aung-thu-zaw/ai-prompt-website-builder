@@ -1,7 +1,9 @@
 import fs from "fs";
 import path from "path";
-import { WebsiteSpec, ExportStyle } from "@/types/website-spec";
+import { WebsiteSpec } from "@/types/website-spec";
+import { ExportStyle, ArchitecturePreset } from "@/types/architecture";
 import { SECTION_COMPONENTS } from "@/engine/config/components";
+import { ARCHITECTURE_STRATEGIES } from "@/engine/config/architectures";
 
 /**
  * Determines the export style of a given component file by inspecting its content.
@@ -191,6 +193,10 @@ const contentToJsxProps = (content: Record<string, unknown>): string => {
 export const generate = (spec: WebsiteSpec): void => {
   const page = spec.pages[0]; // v1: single page only
 
+  // Get architecture preset (default to "landing" if not specified)
+  const architecture: ArchitecturePreset = spec.architecture || "landing";
+  const architectureStrategy = ARCHITECTURE_STRATEGIES[architecture];
+
   /**
    * Collect a map of unique component import statements,
    * keyed by component name, to avoid duplicate imports.
@@ -208,16 +214,14 @@ export const generate = (spec: WebsiteSpec): void => {
       return;
     }
 
-    // Resolve absolute path for component file
     const componentPath = path.join(
       process.cwd(),
-      "templates/next-js/components/sections",
+      "templates/next-js/components",
+      architectureStrategy.folder,
       `${componentName}.tsx`
     );
-    // Detect export style (default or named) for proper import statement
     const exportStyle = detectComponentExportStyle(componentPath);
-    // Construct import path as used in app source code (alias-based)
-    const importPath = `@/components/sections/${componentName}`;
+    const importPath = architectureStrategy.importPath(componentName);
 
     // Generate and register import statement
     importsMap.set(
