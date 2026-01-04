@@ -7,6 +7,7 @@
                 {
                     "id": "sec_home_hero_1",
                     "kind": "hero",
+                    "variant": "split",
                     "content": {
                         "title": "Build faster with AI",
                         "subtitle": "Generate production-ready websites from a single prompt"

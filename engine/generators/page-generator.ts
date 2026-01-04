@@ -10,16 +10,56 @@ type WebsiteSpec = {
     sections: {
       id: string;
       kind: string;
-      content: Record<string, unknown>;
+      variant?: string;
+      content?: Record<string, unknown>;
     }[];
   }[];
 };
 
-const SECTION_COMPONENT_MAP: Record<string, string> = {
-  hero: "Hero",
-  features: "Features",
-  pricing: "Pricing",
-  footer: "Footer",
+const SECTION_COMPONENT_MAP: Record<string, Record<string, string>> = {
+  hero: {
+    default: "HeroDefault",
+    split: "HeroSplit",
+  },
+  features: {
+    default: "Features",
+  },
+  pricing: {
+    default: "Pricing",
+  },
+  footer: {
+    default: "Footer",
+  },
+};
+
+/**
+ * Gets the component name for a given section kind and variant.
+ *
+ * Looks up the component name from SECTION_COMPONENT_MAP based on the section's
+ * kind and variant. If no variant is specified, defaults to "default".
+ * Throws an error if the kind or variant doesn't exist in the mapping.
+ *
+ * @param {string} kind - The section kind (e.g., "hero", "features").
+ * @param {string | undefined} variant - The section variant (e.g., "default", "split").
+ * @returns {string} The component name for the given kind and variant.
+ */
+const getComponentName = (kind: string, variant?: string): string => {
+  const variantMap = SECTION_COMPONENT_MAP[kind];
+  if (!variantMap) {
+    throw new Error(`Unknown section kind: ${kind}`);
+  }
+
+  const variantKey = variant || "default";
+  const componentName = variantMap[variantKey];
+  if (!componentName) {
+    throw new Error(
+      `Unknown variant "${variantKey}" for section kind "${kind}". Available variants: ${Object.keys(
+        variantMap
+      ).join(", ")}`
+    );
+  }
+
+  return componentName;
 };
 
 /**
@@ -161,7 +201,7 @@ export const generate = (spec: WebsiteSpec): void => {
   const importsMap = new Map<string, string>();
 
   page.sections.forEach((section) => {
-    const componentName = SECTION_COMPONENT_MAP[section.kind];
+    const componentName = getComponentName(section.kind, section.variant);
 
     // Skip if already processed (deduplication)
     if (importsMap.has(componentName)) {
@@ -194,7 +234,7 @@ export const generate = (spec: WebsiteSpec): void => {
 
   const body = page.sections
     .map((section) => {
-      const componentName = SECTION_COMPONENT_MAP[section.kind];
+      const componentName = getComponentName(section.kind, section.variant);
       const props = section.content ? contentToProps(section.content) : "";
       return props ? `<${componentName} ${props} />` : `<${componentName} />`;
     })

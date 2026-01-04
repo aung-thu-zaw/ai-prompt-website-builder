@@ -3,7 +3,7 @@ interface HeroProps {
   subtitle: string;
 }
 
-const Hero = ({ title, subtitle }: HeroProps) => {
+const HeroDefault = ({ title, subtitle }: HeroProps) => {
   return (
     <>
       <section className="bg-white dark:bg-black">
@@ -22,4 +22,4 @@ const Hero = ({ title, subtitle }: HeroProps) => {
   );
 };
 
-export default Hero;
+export default HeroDefault;
