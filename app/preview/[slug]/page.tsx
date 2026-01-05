@@ -3,13 +3,8 @@
 import { useParams } from "next/navigation";
 import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
+import { Button } from "@/components/ui/button";
 
-/**
- * Preview page that displays a generated project in an iframe.
- *
- * This page loads the generated project preview via an iframe,
- * allowing users to see the generated website without downloading it.
- */
 export default function PreviewPage() {
   const params = useParams();
   const slug = params?.slug as string;
@@ -19,48 +14,82 @@ export default function PreviewPage() {
 
   const previewUrl = slug ? `/api/preview/${slug}` : null;
 
-  // Fallback timeout to hide loading after a reasonable time
-  // This ensures loading doesn't stay forever if onLoad doesn't fire
   useEffect(() => {
     if (!previewUrl || !isLoading) return;
 
     const timeout = setTimeout(() => {
       setIsLoading(false);
-    }, 2000); // Hide loading after 2 seconds max as safety net
+    }, 2000);
 
     return () => clearTimeout(timeout);
   }, [previewUrl, isLoading]);
 
   return (
-    <div className="flex h-screen flex-col bg-zinc-50 dark:bg-black">
+    <div className="flex h-screen flex-col bg-background">
       {/* Header */}
-      <div className="border-b border-zinc-200 bg-white px-6 py-4 dark:border-zinc-800 dark:bg-zinc-900">
+      <div className="border-b bg-card px-6 py-4">
         <div className="flex items-center justify-between">
-          <h1 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">
-            Preview: {slug || "Loading..."}
-          </h1>
-          <a
-            href={`/api/preview/${slug}`}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-sm text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100"
-          >
-            Open in new tab
-          </a>
+          <div className="flex items-center gap-4">
+            <Link
+              href="/"
+              className="text-muted-foreground hover:text-foreground transition-colors"
+            >
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                width="20"
+                height="20"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <path d="m12 19-7-7 7-7" />
+                <path d="M19 12H5" />
+              </svg>
+            </Link>
+            <div>
+              <h1 className="text-lg font-semibold text-foreground">Preview</h1>
+              <p className="text-sm text-muted-foreground">
+                {slug || "Loading..."}
+              </p>
+            </div>
+          </div>
         </div>
       </div>
 
       {/* Preview iframe */}
-      <div className="flex-1 relative">
+      <div className="flex-1 relative bg-muted/30">
         {error ? (
           <div className="flex h-full items-center justify-center">
-            <div className="text-center">
-              <p className="text-red-600 dark:text-red-400 mb-2">{error}</p>
-              <Link
-                href="/"
-                className="text-sm text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100"
-              >
-                ← Back to home
+            <div className="text-center space-y-4 max-w-md px-4">
+              <div className="mx-auto h-12 w-12 rounded-full bg-destructive/10 flex items-center justify-center">
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  width="24"
+                  height="24"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  className="text-destructive"
+                >
+                  <circle cx="12" cy="12" r="10" />
+                  <line x1="12" x2="12" y1="8" y2="12" />
+                  <line x1="12" x2="12.01" y1="16" y2="16" />
+                </svg>
+              </div>
+              <div className="space-y-2">
+                <p className="text-lg font-medium text-foreground">
+                  Failed to load preview
+                </p>
+                <p className="text-sm text-muted-foreground">{error}</p>
+              </div>
+              <Link href="/">
+                <Button variant="outline">Back to Home</Button>
               </Link>
             </div>
           </div>
@@ -72,7 +101,6 @@ export default function PreviewPage() {
             title={`Preview of ${slug}`}
             suppressHydrationWarning
             onLoad={() => {
-              // Hide loading when iframe content loads
               setIsLoading(false);
             }}
             onError={() => {
@@ -84,10 +112,10 @@ export default function PreviewPage() {
 
         {/* Loading overlay */}
         {isLoading && (
-          <div className="absolute inset-0 flex items-center justify-center bg-zinc-50/80 dark:bg-black/80">
-            <div className="text-center">
-              <div className="mb-4 h-8 w-8 animate-spin rounded-full border-4 border-zinc-300 border-t-zinc-600 dark:border-zinc-700 dark:border-t-zinc-300 mx-auto" />
-              <p className="text-sm text-zinc-600 dark:text-zinc-400">
+          <div className="absolute inset-0 flex items-center justify-center bg-background/80 backdrop-blur-sm">
+            <div className="text-center space-y-4">
+              <div className="mx-auto h-10 w-10 animate-spin rounded-full border-4 border-muted border-t-primary" />
+              <p className="text-sm font-medium text-muted-foreground">
                 Loading preview...
               </p>
             </div>

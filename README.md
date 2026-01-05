@@ -343,18 +343,6 @@ npm run lint
 
 ---
 
-### Roadmap
-
-- [ ] Schema versioning for WebsiteSpec
-- [ ] Saved projects & authentication
-- [ ] Preview viewport controls (mobile / desktop)
-- [ ] Multi-page support
-- [ ] Cloud deployment mode
-- [ ] Additional section types
-- [ ] Custom component templates
-
----
-
 ### Why This Project Exists
 
 This project was built to:
@@ -365,12 +353,6 @@ This project was built to:
 - ✅ Build something **maintainable, inspectable, and honest**
 
 It prioritizes **engineering clarity over shortcuts**.
-
----
-
-### Contributing
-
-Contributions are welcome! Please feel free to submit a Pull Request.
 
 ---
 

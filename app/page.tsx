@@ -78,28 +78,60 @@ export default function Home() {
   };
 
   return (
-    <div className="flex min-h-screen flex-col items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <form
-        onSubmit={handleSubmit}
-        className="flex flex-col gap-4 w-full max-w-md"
-      >
-        <Textarea placeholder="Enter your prompt here" name="prompt" />
-        <div className="flex gap-2">
-          <Button type="submit" disabled={isLoading} className="flex-1">
-            {isLoading ? "Generating..." : "Generate"}
-          </Button>
-          {previewUrl && (
-            <Button
-              type="button"
-              variant="outline"
-              onClick={handlePreview}
-              className="flex-1"
-            >
-              Preview
-            </Button>
-          )}
+    <div className="flex min-h-screen flex-col items-center justify-center bg-background px-4 py-12">
+      <div className="w-full max-w-2xl space-y-8">
+        {/* Header */}
+        <div className="text-center space-y-3">
+          <h1 className="text-4xl font-bold tracking-tight text-foreground">
+            AI Prompt Website Builder
+          </h1>
+          <p className="text-muted-foreground text-md">
+            Instantly turn your ideas into professional, production-ready
+            Next.js sites powered by AI.
+          </p>
         </div>
-      </form>
+
+        {/* Form */}
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div className="space-y-2">
+            <Textarea
+              id="prompt"
+              name="prompt"
+              placeholder="e.g., Create a modern SaaS landing page for task management app called 'Taskify'"
+              className="min-h-[120px] resize-none"
+              disabled={isLoading}
+            />
+          </div>
+
+          <div className="flex gap-3">
+            <Button
+              type="submit"
+              disabled={isLoading}
+              className="flex-1"
+              size="lg"
+            >
+              {isLoading ? (
+                <>
+                  <span className="mr-2">Generating...</span>
+                  <div className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
+                </>
+              ) : (
+                "Generate Website"
+              )}
+            </Button>
+            {previewUrl && (
+              <Button
+                type="button"
+                variant="outline"
+                onClick={handlePreview}
+                size="lg"
+              >
+                Preview
+              </Button>
+            )}
+          </div>
+        </form>
+      </div>
     </div>
   );
 }
