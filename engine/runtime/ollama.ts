@@ -5,6 +5,8 @@ import {
   DEFAULT_OLLAMA_TIMEOUT,
 } from "@/engine/config/ollama";
 import { WEBSITE_SPEC_SYSTEM_PROMPT } from "@/engine/prompts/website-spec";
+import { validate } from "@/engine/specs/validate";
+import { repair } from "@/engine/specs/repair";
 
 /**
  * Converts a natural language prompt into a typed `WebsiteSpec` using the Ollama API.
@@ -14,7 +16,9 @@ import { WEBSITE_SPEC_SYSTEM_PROMPT } from "@/engine/prompts/website-spec";
  * 2. Builds a system-primed prompt for generating a WebsiteSpec JSON payload
  * 3. Calls Ollama's `/api/generate` endpoint and normalizes different response shapes
  * 4. Cleans up Markdown code fences / extra text and parses the JSON into a `WebsiteSpec`
- * 5. Validates the resulting spec and backfills the `slug` if missing
+ * 5. Validates the resulting spec against the schema
+ * 6. Auto-repairs common issues (missing IDs, slugs, etc.) with safe defaults
+ * 7. Returns a guaranteed generator-safe spec
  *
  * It throws rich, human-readable errors for API failures, timeouts, connectivity issues,
  * invalid JSON, or structurally invalid specs so that callers can surface actionable messages.
@@ -81,22 +85,33 @@ export const promptToSpec = async (
     } else if (data.response && typeof data.response === "string") {
       jsonText = data.response;
     } else if (typeof data === "object" && !data.response) {
-      const spec = data as WebsiteSpec;
-      if (spec.pages && Array.isArray(spec.pages)) {
-        // Backfill slug from name if missing
-        if (!spec.slug && spec.name) {
-          spec.slug = spec.name
-            .toString()
-            .trim()
-            .toLowerCase()
-            .replace(/[\s\W-]+/g, "-")
-            .replace(/^-+|-+$/g, "");
+      // Direct object response - validate and repair
+      const validation = validate(data);
+      if (!validation.valid) {
+        // Try to repair
+        try {
+          const repaired = repair(data as Partial<WebsiteSpec>);
+          const repairedValidation = validate(repaired);
+          if (repairedValidation.valid) {
+            console.log("✅ Spec repaired successfully");
+            return repaired;
+          }
+          throw new Error(
+            `Spec validation failed even after repair: ${repairedValidation.errors.join(
+              "; "
+            )}`
+          );
+        } catch (repairError) {
+          throw new Error(
+            `Spec validation failed and could not be repaired: ${validation.errors.join(
+              "; "
+            )}. Repair error: ${
+              repairError instanceof Error ? repairError.message : "Unknown"
+            }`
+          );
         }
-        return spec;
       }
-      throw new Error(
-        "Invalid response format: expected WebsiteSpec structure"
-      );
+      return data as WebsiteSpec;
     } else {
       throw new Error("Unexpected response format from Ollama API");
     }
@@ -115,29 +130,52 @@ export const promptToSpec = async (
       jsonString = jsonMatch[0];
     }
 
-    const spec = JSON.parse(jsonString) as WebsiteSpec;
+    const parsedSpec = JSON.parse(jsonString) as Partial<WebsiteSpec>;
 
-    // Basic structural validation of the generated spec (pages are mandatory)
-    if (!spec.pages || !Array.isArray(spec.pages) || spec.pages.length === 0) {
-      throw new Error(
-        "Invalid spec: pages array is required and must not be empty"
-      );
+    // Validate the parsed spec
+    const validation = validate(parsedSpec);
+
+    if (!validation.valid) {
+      // Try to repair common issues
+      try {
+        const repaired = repair(parsedSpec);
+        const repairedValidation = validate(repaired);
+
+        if (repairedValidation.valid) {
+          console.log("✅ Spec repaired successfully");
+          console.log("🚀 ~ repaired spec:", repaired);
+          return repaired;
+        }
+
+        // Repair didn't fix all issues - fail loudly
+        throw new Error(
+          `Spec validation failed even after repair: ${repairedValidation.errors.join(
+            "; "
+          )}`
+        );
+      } catch (repairError) {
+        if (
+          repairError instanceof Error &&
+          repairError.message.includes("Cannot repair")
+        ) {
+          // Unrecoverable error from repair function
+          throw repairError;
+        }
+        // Repair attempt failed for other reasons
+        throw new Error(
+          `Spec validation failed and could not be repaired: ${validation.errors.join(
+            "; "
+          )}. Repair error: ${
+            repairError instanceof Error ? repairError.message : "Unknown"
+          }`
+        );
+      }
     }
 
-    // Backfill a URL-friendly slug if the model omitted it
-    if (!spec.slug && spec.name) {
-      spec.slug = spec.name
-        .toString()
-        .trim()
-        .toLowerCase()
-        .replace(/[\s\W-]+/g, "-")
-        .replace(/^-+|-+$/g, "");
-    }
-
-    // Log the parsed spec for debugging/troubleshooting purposes
-    console.log("🚀 ~ spec:", spec);
-
-    return spec;
+    // Spec is valid - return as-is
+    console.log("✅ Spec validated successfully");
+    console.log("🚀 ~ spec:", parsedSpec);
+    return parsedSpec as WebsiteSpec;
   } catch (error) {
     if (error instanceof SyntaxError) {
       throw new Error(
