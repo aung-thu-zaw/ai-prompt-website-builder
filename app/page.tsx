@@ -3,19 +3,27 @@
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 
 export default function Home() {
   const [isLoading, setIsLoading] = useState(false);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const router = useRouter();
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const formData = new FormData(e.target as HTMLFormElement);
     const prompt = formData.get("prompt") as string;
     setIsLoading(true);
+    setPreviewUrl(null);
+
     try {
       const response = await fetch("/api/generate", {
         method: "POST",
         body: JSON.stringify({ prompt }),
+        headers: {
+          "Content-Type": "application/json",
+        },
       });
 
       if (!response.ok) {
@@ -29,33 +37,43 @@ export default function Home() {
         throw new Error(errorMessage);
       }
 
-      const blob = await response.blob();
+      const data = await response.json();
 
-      // Extract filename from Content-Disposition header
-      const contentDisposition = response.headers.get("Content-Disposition");
-      let fileName = "generated-site.zip";
-      if (contentDisposition) {
-        // Match filename="..." or filename=...
-        const match = contentDisposition.match(/filename[^;=\n]*=([^;]+)/);
-        if (match && match[1]) {
-          // Remove surrounding quotes if present
-          fileName = match[1].trim().replace(/^["']|["']$/g, "");
+      if (data.success && data.download) {
+        // Convert base64 to blob and trigger download
+        const binaryString = atob(data.download.data);
+        const bytes = new Uint8Array(binaryString.length);
+        for (let i = 0; i < binaryString.length; i++) {
+          bytes[i] = binaryString.charCodeAt(i);
         }
-      }
+        const blob = new Blob([bytes], { type: data.download.contentType });
 
-      // Create blob URL and trigger download
-      const url = window.URL.createObjectURL(blob);
-      const link = document.createElement("a");
-      link.href = url;
-      link.download = fileName;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      window.URL.revokeObjectURL(url);
+        const url = window.URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = data.download.fileName;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        window.URL.revokeObjectURL(url);
+
+        // Set preview URL for navigation
+        if (data.previewUrl) {
+          setPreviewUrl(data.previewUrl);
+        }
+      } else {
+        throw new Error("Invalid response format");
+      }
     } catch (error) {
       console.error(error);
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const handlePreview = () => {
+    if (previewUrl) {
+      router.push(previewUrl);
     }
   };
 
@@ -66,9 +84,21 @@ export default function Home() {
         className="flex flex-col gap-4 w-full max-w-md"
       >
         <Textarea placeholder="Enter your prompt here" name="prompt" />
-        <Button type="submit" disabled={isLoading}>
-          {isLoading ? "Generating..." : "Generate"}
-        </Button>
+        <div className="flex gap-2">
+          <Button type="submit" disabled={isLoading} className="flex-1">
+            {isLoading ? "Generating..." : "Generate"}
+          </Button>
+          {previewUrl && (
+            <Button
+              type="button"
+              variant="outline"
+              onClick={handlePreview}
+              className="flex-1"
+            >
+              Preview
+            </Button>
+          )}
+        </div>
       </form>
     </div>
   );

@@ -77,15 +77,22 @@ export async function POST(request: Request) {
     );
   }
 
-  // Read the generated ZIP into memory and return as a binary HTTP response
+  // Read the generated ZIP into memory
   const fileBuffer = fs.readFileSync(zipPath);
   const fileName = `${projectSlug}.zip`;
 
-  return new NextResponse(fileBuffer, {
-    headers: {
-      "Content-Type": "application/zip",
-      "Content-Disposition": `attachment; filename="${fileName}"`,
-      "Content-Length": fileBuffer.length.toString(),
+  // Return JSON response with download data and preview URL
+  // Frontend will handle both download and preview navigation
+  return NextResponse.json({
+    success: true,
+    projectSlug,
+    fileName,
+    previewUrl: `/preview/${projectSlug}`,
+    download: {
+      // Convert buffer to base64 for JSON response
+      data: fileBuffer.toString("base64"),
+      fileName,
+      contentType: "application/zip",
     },
   });
 }
