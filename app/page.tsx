@@ -19,7 +19,14 @@ export default function Home() {
       });
 
       if (!response.ok) {
-        throw new Error("Failed to generate website");
+        const errorData = await response
+          .json()
+          .catch(() => ({ error: "Unknown error" }));
+        const errorMessage =
+          errorData.details || errorData.error || "Failed to generate website";
+        console.error("Generation error:", errorMessage);
+        alert(`Error: ${errorMessage}`);
+        throw new Error(errorMessage);
       }
 
       const blob = await response.blob();

@@ -3,51 +3,59 @@ import fs from "fs";
 import path from "path";
 import { generate } from "@/engine/generators/project-generator";
 import { WebsiteSpec } from "@/types/website-spec";
+import { promptToSpec } from "@/engine/runtime/ollama";
 
-function mockPromptToSpec(prompt: string) {
-  return {
-    project: {
-      name: "Generated Website",
-      slug: "ai-website-builder",
-    },
-    architecture: "landing",
-    theme: {
-      primaryColor: "#6366f1",
-      font: "Inter",
-    },
-    pages: [
-      {
-        id: "page_home",
-        route: "/",
-        sections: [
-          {
-            id: "hero",
-            kind: "hero",
-            variant: "split",
-            content: {
-              title: prompt || "AI Generated Website",
-              subtitle: "Generated from your prompt",
-              ctaLabel: "Get Started",
-            },
-          },
-        ],
-      },
-    ],
-  };
-}
+// Increase timeout for Ollama API calls (in seconds)
+// Default is 10s, we need more for LLM generation
+export const maxDuration = 300; // 5 minutes
 
 export async function POST(req: Request) {
   const { prompt } = await req.json();
 
-  const spec = mockPromptToSpec(prompt);
+  if (!prompt || typeof prompt !== "string" || prompt.trim().length === 0) {
+    return NextResponse.json(
+      { error: "Prompt is required and must be a non-empty string" },
+      { status: 400 }
+    );
+  }
 
-  await generate(spec as WebsiteSpec);
+  let spec: WebsiteSpec;
+  try {
+    spec = await promptToSpec(prompt);
+  } catch (error) {
+    console.error("Failed to generate spec from prompt:", error);
+    return NextResponse.json(
+      {
+        error: "Failed to generate website specification",
+        details: error instanceof Error ? error.message : "Unknown error",
+      },
+      { status: 500 }
+    );
+  }
 
-  const zipPath = path.join(
-    process.cwd(),
-    "output",
-    `${spec.project.slug}.zip`
-  );
+  // Validate that project exists (generate function will also check, but we need it for the filename)
+  if (!spec.project) {
+    return NextResponse.json(
+      { error: "Generated specification is missing project configuration" },
+      { status: 500 }
+    );
+  }
+
+  try {
+    await generate(spec);
+  } catch (error) {
+    console.error("Failed to generate project:", error);
+    return NextResponse.json(
+      {
+        error: "Failed to generate website project",
+        details: error instanceof Error ? error.message : "Unknown error",
+      },
+      { status: 500 }
+    );
+  }
+
+  const projectSlug = spec.project.slug || "generated-site";
+  const zipPath = path.join(process.cwd(), "output", `${projectSlug}.zip`);
 
   if (!fs.existsSync(zipPath)) {
     return NextResponse.json(
@@ -57,7 +65,7 @@ export async function POST(req: Request) {
   }
 
   const fileBuffer = fs.readFileSync(zipPath);
-  const fileName = `${spec.project.slug}.zip`;
+  const fileName = `${projectSlug}.zip`;
 
   return new NextResponse(fileBuffer, {
     headers: {
