@@ -6,10 +6,11 @@
  * template scaffolds to output directories.
  */
 export const EXCLUDE_DIRS: readonly string[] = [
-  "node_modules",
+  // "node_modules",
   ".next",
   ".git",
 ];
 
-export const EXCLUDE_FILES: readonly string[] = ["package-lock.json"];
-
+export const EXCLUDE_FILES: readonly string[] = [
+  // "package-lock.json"
+];

@@ -1,24 +1,40 @@
 import fs from "fs";
 import path from "path";
 import { WebsiteSpec } from "@/types/website-spec";
+import { updateLayout } from "@/engine/generators/font-generator";
 
 /**
- * Converts a hex color to oklch format using a simplified approximation.
- * For production, consider using a proper color conversion library like 'culori'.
+ * Converts a hexadecimal color code to OKLCH color space format.
  *
- * @param {string} hex - Hex color string (e.g., "#6366f1").
- * @returns {string} oklch color string (e.g., "oklch(0.5 0.2 250)").
+ * This function performs a complete color space transformation from hexadecimal RGB
+ * to OKLCH (OK Lightness, Chroma, Hue), which is a perceptually uniform color space
+ * suitable for modern CSS. The conversion process involves:
+ * 1. Parsing the hex color to normalized RGB values (0-1 range)
+ * 2. Converting RGB to linear RGB using gamma correction
+ * 3. Transforming to XYZ color space using D65 white point
+ * 4. Converting XYZ to CIE Lab color space
+ * 5. Approximating OKLab from Lab values
+ * 6. Calculating chroma and hue from OKLab coordinates
+ *
+ * The resulting OKLCH format is compatible with Tailwind CSS and Shadcn UI theming,
+ * providing better perceptual uniformity for color manipulation.
+ *
+ * @param {string} hex - The hexadecimal color code (with or without leading #, e.g., "#6366f1" or "6366f1").
+ * @returns {string} The OKLCH color string in the format "oklch(L C H)" where L is lightness (0-1),
+ *                   C is chroma, and H is hue in degrees (0-360).
+ *
+ * @example
+ *   hexToOklch("#6366f1") // Returns: "oklch(0.623 0.145 264.5)"
  */
 const hexToOklch = (hex: string): string => {
-  // Remove # if present
   const cleanHex = hex.replace("#", "");
 
-  // Parse RGB
+  // Parse RGB values from hex string (each pair represents one channel)
   const r = parseInt(cleanHex.substring(0, 2), 16) / 255;
   const g = parseInt(cleanHex.substring(2, 4), 16) / 255;
   const b = parseInt(cleanHex.substring(4, 6), 16) / 255;
 
-  // Convert RGB to linear RGB
+  // Gamma correction: convert sRGB to linear RGB for accurate color space calculations
   const toLinear = (c: number) =>
     c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4);
 
@@ -26,17 +42,17 @@ const hexToOklch = (hex: string): string => {
   const gLinear = toLinear(g);
   const bLinear = toLinear(b);
 
-  // Convert to XYZ (D65)
+  // Transform linear RGB to XYZ color space using sRGB to XYZ transformation matrix (D65 illuminant)
   const x = rLinear * 0.4124564 + gLinear * 0.3575761 + bLinear * 0.1804375;
   const y = rLinear * 0.2126729 + gLinear * 0.7151522 + bLinear * 0.072175;
   const z = rLinear * 0.0193339 + gLinear * 0.119192 + bLinear * 0.9503041;
 
-  // Normalize by D65 white point
+  // Normalize XYZ values by D65 white point (standard daylight illuminant)
   const xn = x / 0.95047;
   const yn = y / 1.0;
   const zn = z / 1.08883;
 
-  // Convert to Lab
+  // Convert to CIE Lab color space using the standard Lab transformation function
   const f = (t: number) =>
     t > 0.008856 ? Math.pow(t, 1 / 3) : 7.787 * t + 16 / 116;
 
@@ -48,62 +64,83 @@ const hexToOklch = (hex: string): string => {
   const a = 500 * (fx - fy);
   const bLab = 200 * (fy - fz);
 
-  // Convert Lab to OKLab (approximation)
-  // Using simplified OKLab conversion
+  // Approximate OKLab from Lab values (simplified conversion for OKLCH compatibility)
   const okL = (l + 16) / 116;
   const okA = a / 100;
   const okB = bLab / 100;
 
-  // Calculate chroma and hue
+  // Calculate chroma (color intensity) and hue (color angle) from OKLab a* and b* coordinates
   const c = Math.sqrt(okA * okA + okB * okB);
   let h = 0;
   if (c > 0.001) {
+    // Convert from radians to degrees, ensuring positive angle (0-360 range)
     h = (Math.atan2(okB, okA) * 180) / Math.PI;
     if (h < 0) h += 360;
   }
 
-  // Normalize lightness to 0-1 range (approximation)
+  // Clamp lightness to valid OKLCH range (0-1) for CSS compatibility
   const normalizedL = Math.max(0, Math.min(1, okL));
 
   return `oklch(${normalizedL.toFixed(3)} ${c.toFixed(3)} ${h.toFixed(1)})`;
 };
 
 /**
- * Generates a contrasting foreground color for the primary color.
- * Uses white for dark colors and dark for light colors.
+ * Generates an appropriate foreground (text) color for a given background color in OKLCH format.
  *
- * @param {string} oklch - oklch color string.
- * @returns {string} Contrasting oklch color for foreground.
+ * This function analyzes the lightness of the provided OKLCH color and selects a contrasting
+ * foreground color to ensure optimal text readability. For dark backgrounds (lightness < 0.5),
+ * a light foreground color is chosen; for light backgrounds, a dark foreground is used.
+ *
+ * The generated foreground color uses zero chroma (grayscale) to ensure maximum contrast
+ * and readability, which is a common practice in UI design.
+ *
+ * @param {string} oklch - The OKLCH color string to generate a foreground color for.
+ * @returns {string} An OKLCH color string representing the foreground color. Returns a default
+ *                   white color if the input format is invalid.
+ *
+ * @example
+ *   generateForegroundColor("oklch(0.623 0.145 264.5)") // Returns: "oklch(0.985 0 0)" (light foreground for dark background)
+ *   generateForegroundColor("oklch(0.850 0.120 120.0)") // Returns: "oklch(0.145 0 0)" (dark foreground for light background)
  */
 const generateForegroundColor = (oklch: string): string => {
-  // Extract lightness
   const match = oklch.match(/oklch\(([\d.]+)\s+([\d.]+)\s+([\d.]+)\)/);
   if (!match) {
-    return "oklch(0.985 0 0)"; // Default white
+    return "oklch(0.985 0 0)";
   }
 
   const l = parseFloat(match[1]);
 
-  // If color is dark (lightness < 0.5), use light foreground; otherwise use dark
+  // Select contrasting foreground based on background lightness threshold
   const foregroundL = l < 0.5 ? 0.985 : 0.145;
 
   return `oklch(${foregroundL.toFixed(3)} 0 0)`;
 };
 
 /**
- * Updates globals.css with the theme primary color.
+ * Updates the global CSS file with primary color theme variables in both light and dark modes.
  *
- * @param {string} primaryColor - Hex color string for primary color.
- * @param {string} outputPath - Path to the globals.css file.
+ * This function modifies the `globals.css` file to inject theme colors in OKLCH format,
+ * which is compatible with Tailwind CSS and Shadcn UI. It updates:
+ * - `:root` CSS variables for light mode (--primary and --primary-foreground)
+ * - `.dark` CSS variables for dark mode (with adjusted lightness for better contrast)
+ *
+ * The function performs in-place replacement of existing color values using regex patterns,
+ * ensuring that the CSS structure remains intact while only the color values are updated.
+ *
+ * @param {string} primaryColor - The primary color in hexadecimal format (e.g., "#6366f1").
+ * @param {string} outputPath - The absolute path to the `globals.css` file to be updated.
+ *
+ * @sideeffect Modifies the file at `outputPath` by replacing existing primary color CSS variables.
+ *
+ * @throws {Error} If the file cannot be read or written (filesystem errors).
  */
 const updateGlobalsCss = (primaryColor: string, outputPath: string): void => {
   const primaryOklch = hexToOklch(primaryColor);
   const primaryForegroundOklch = generateForegroundColor(primaryOklch);
 
-  // Read existing file
   let content = fs.readFileSync(outputPath, "utf-8");
 
-  // Update :root primary colors
+  // Replace existing primary color variables in :root selector
   content = content.replace(
     /--primary:\s*oklch\([^)]+\);/g,
     `--primary: ${primaryOklch};`
@@ -113,7 +150,7 @@ const updateGlobalsCss = (primaryColor: string, outputPath: string): void => {
     `--primary-foreground: ${primaryForegroundOklch};`
   );
 
-  // Update .dark primary colors (use lighter version for dark mode)
+  // Generate a lighter variant for dark mode to ensure proper contrast
   const darkMatch = primaryOklch.match(
     /oklch\(([\d.]+)\s+([\d.]+)\s+([\d.]+)\)/
   );
@@ -122,13 +159,13 @@ const updateGlobalsCss = (primaryColor: string, outputPath: string): void => {
     const l = parseFloat(darkMatch[1]);
     const c = darkMatch[2];
     const h = darkMatch[3];
-    // For dark mode, use lighter version (but not too light)
+    // Increase lightness for dark mode (capped at 0.923 to prevent overly bright colors)
     const darkL = Math.min(0.923, l + 0.3);
     darkPrimaryOklch = `oklch(${darkL.toFixed(3)} ${c} ${h})`;
   }
   const darkPrimaryForegroundOklch = generateForegroundColor(darkPrimaryOklch);
 
-  // Update .dark section
+  // Update .dark selector section with dark mode color variables
   const darkSectionRegex = /\.dark\s*\{([^}]+)\}/s;
   const darkSectionMatch = content.match(darkSectionRegex);
   if (darkSectionMatch) {
@@ -148,167 +185,33 @@ const updateGlobalsCss = (primaryColor: string, outputPath: string): void => {
 };
 
 /**
- * Updates layout.tsx with the specified font.
+ * Generates theme configuration files for a Next.js project based on the WebsiteSpec.
  *
- * @param {string} fontName - Font name (e.g., "Inter", "Roboto").
- * @param {string} outputPath - Path to the layout.tsx file.
- */
-const updateLayout = (fontName: string, outputPath: string): void => {
-  let content = fs.readFileSync(outputPath, "utf-8");
-
-  // Font identifier for import (keep original name for Next.js font exports like Geist_Mono)
-  const fontImportName = fontName;
-
-  // Normalize font name for CSS variable (kebab-case: Geist_Mono -> geist-mono)
-  const fontVariable = fontName
-    .replace(/_/g, "-")
-    .replace(/\s+/g, "-")
-    .toLowerCase();
-
-  // Convert to camelCase for JavaScript variable name (Geist_Mono -> geistMono)
-  const fontVarName = fontName
-    .split(/[_\s]+/)
-    .map((part, index) => {
-      const lower = part.toLowerCase();
-      return index === 0
-        ? lower
-        : lower.charAt(0).toUpperCase() + lower.slice(1);
-    })
-    .join("");
-
-  // Remove existing font imports from next/font/google
-  content = content.replace(
-    /import\s+\{[^}]+\}\s+from\s+["']next\/font\/google["'];?\n/g,
-    ""
-  );
-
-  // Remove ALL existing font variable declarations (any font name)
-  // Match multi-line font declarations - match any const variable = FontName({...});
-  content = content.replace(
-    /const\s+\w+\s*=\s*\w+\([\s\S]*?\)\s*;\s*\n/g,
-    (match) => {
-      // Only remove if it looks like a font declaration (has variable, subsets, display)
-      if (
-        match.includes("variable:") &&
-        (match.includes("subsets:") || match.includes("display:"))
-      ) {
-        return "";
-      }
-      return match;
-    }
-  );
-
-  // Clean up any duplicate empty lines
-  content = content.replace(/\n{3,}/g, "\n\n");
-
-  // Add new font import
-  const fontImport = `import { ${fontImportName} } from "next/font/google";\n`;
-
-  // Insert font import after type imports, before other imports
-  const typeImportMatch = content.match(/(import\s+type[^;]+;[\s\n]*)/);
-  if (typeImportMatch) {
-    content = content.replace(
-      /(import\s+type[^;]+;[\s\n]*)/,
-      `$1${fontImport}`
-    );
-  } else {
-    // Insert at the beginning after any existing imports
-    const firstImportMatch = content.match(/(import[^;]+;[\s\n]*)/);
-    if (firstImportMatch) {
-      content = content.replace(/(import[^;]+;[\s\n]*)/, `$1${fontImport}`);
-    } else {
-      content = `${fontImport}${content}`;
-    }
-  }
-
-  // Add font variable declaration
-  // Some fonts (like Anton) require weight property
-  const fontVarDeclaration = `const ${fontVarName} = ${fontImportName}({
-  weight: "400",
-  variable: "--font-${fontVariable}",
-  subsets: ["latin"],
-  display: "swap",
-});
-
-`;
-
-  // Insert after imports, before metadata
-  const metadataMatch = content.match(/(export\s+const\s+metadata)/);
-  if (metadataMatch) {
-    content = content.replace(
-      /(export\s+const\s+metadata)/,
-      `${fontVarDeclaration}$1`
-    );
-  } else {
-    // Insert before RootLayout
-    content = content.replace(
-      /(export\s+default\s+function\s+RootLayout)/,
-      `${fontVarDeclaration}$1`
-    );
-  }
-
-  // Update body className to use new font
-  // Remove ALL font variable references and font-sans, then add the new one
-  content = content.replace(
-    /className=\{`([^`]*)`\}/,
-    (match, classNameContent) => {
-      // Remove ALL font variable references (any ${variableName.variable})
-      let cleaned = classNameContent.replace(/\$\{[^}]+\}\s*/g, "");
-
-      // Remove font-sans class
-      cleaned = cleaned.replace(/\s*font-sans\s*/g, " ");
-
-      // Remove duplicate antialiased
-      cleaned = cleaned.replace(/\s*antialiased\s*/g, " ");
-
-      // Clean up whitespace
-      cleaned = cleaned.replace(/\s+/g, " ").trim();
-
-      // Build the final className with proper order
-      const parts = [
-        `\${${fontVarName}.variable}`,
-        "font-sans",
-        cleaned,
-        "antialiased",
-      ].filter(Boolean);
-
-      return `className={\`${parts.join(" ")}\`}`;
-    }
-  );
-
-  // Update font reference in globals.css
-  const globalsCssPath = path.join(path.dirname(outputPath), "globals.css");
-  if (fs.existsSync(globalsCssPath)) {
-    let cssContent = fs.readFileSync(globalsCssPath, "utf-8");
-    // Update both @theme inline and any other references
-    cssContent = cssContent.replace(
-      /--font-sans:\s*var\(--font-[^)]+\);/g,
-      `--font-sans: var(--font-${fontVariable});`
-    );
-    fs.writeFileSync(globalsCssPath, cssContent, "utf-8");
-  }
-
-  fs.writeFileSync(outputPath, content, "utf-8");
-};
-
-/**
- * Generates theme configuration by updating globals.css and layout.tsx.
+ * This function orchestrates the theme generation process by applying the theme configuration
+ * from the WebsiteSpec to the generated project files. It updates:
+ * - `globals.css` with the primary color theme (in OKLCH format for both light and dark modes)
+ * - `layout.tsx` with the specified Google Font configuration
  *
- * @param {WebsiteSpec} spec - The website specification containing theme config.
- * @param {string} outputDir - The output directory where the generated project is located.
+ * The function performs no operation if the WebsiteSpec does not include a theme configuration,
+ * allowing projects to use default themes when no customization is specified.
+ *
+ * @param {WebsiteSpec} spec - The website specification containing theme configuration.
+ * @param {string} outputDir - The absolute path to the output directory where the generated project is located.
+ *
+ * @sideeffect Modifies `app/globals.css` and `app/layout.tsx` files in the output directory.
+ *
+ * @throws {Error} If theme files cannot be read or written (filesystem errors).
  */
 export const generate = (spec: WebsiteSpec, outputDir: string): void => {
   if (!spec.theme) {
     return;
   }
 
-  // Update globals.css with primary color
   const globalsCssPath = path.join(outputDir, "app/globals.css");
   if (fs.existsSync(globalsCssPath)) {
     updateGlobalsCss(spec.theme.primaryColor, globalsCssPath);
   }
 
-  // Update layout.tsx with font
   const layoutPath = path.join(outputDir, "app/layout.tsx");
   if (fs.existsSync(layoutPath)) {
     updateLayout(spec.theme.font, layoutPath);

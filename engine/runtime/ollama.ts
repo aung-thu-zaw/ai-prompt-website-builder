@@ -1,95 +1,48 @@
 import { WebsiteSpec } from "@/types/website-spec";
+import { OllamaConfig } from "@/types/ollama";
+import {
+  DEFAULT_OLLAMA_CONFIG,
+  DEFAULT_OLLAMA_TIMEOUT,
+} from "@/engine/config/ollama";
+import { WEBSITE_SPEC_SYSTEM_PROMPT } from "@/engine/prompts/website-spec";
 
 /**
- * Configuration for Ollama API client.
- */
-interface OllamaConfig {
-  baseUrl?: string;
-  model?: string;
-}
-
-/**
- * Default Ollama configuration.
- */
-const DEFAULT_CONFIG: Required<OllamaConfig> = {
-  baseUrl: process.env.OLLAMA_BASE_URL || "http://localhost:11434",
-  model: process.env.OLLAMA_MODEL || "qwen2.5:latest",
-};
-
-/**
- * Default timeout for Ollama API requests (in milliseconds).
- */
-const DEFAULT_TIMEOUT = parseInt(process.env.OLLAMA_TIMEOUT || "120000", 10); // 120 seconds default
-
-/**
- * System prompt that instructs the LLM to generate a WebsiteSpec JSON.
- */
-const SYSTEM_PROMPT = `You are a website specification generator. Your task is to convert a user's prompt into a structured JSON specification for a website.
-
-The specification must follow this exact structure:
-{
-  "project": {
-    "name": "string (website name)",
-    "slug": "string (URL-friendly identifier, lowercase with hyphens)"
-  },
-  "architecture": "landing" | "ecommerce" | "marketplace",
-  "theme": {
-    "primaryColor": "string (hex color code, e.g., #6366f1)",
-    "font": "string (Google Font name, e.g., Inter, Anton, Geist_Mono)"
-  },
-  "pages": [
-    {
-      "id": "string (unique page identifier)",
-      "route": "string (URL route, e.g., /)",
-      "sections": [
-        {
-          "id": "string (unique section identifier)",
-          "kind": "hero" | "features" | "pricing" | "footer",
-          "variant": "string (optional, e.g., default, split)",
-          "content": {
-            // Section-specific content based on kind
-            // For hero: title, subtitle, ctaLabel, etc.
-            // For features: items (array of strings)
-            // For pricing: plans (array of strings)
-            // For footer: copyright, links, etc.
-          }
-        }
-      ]
-    }
-  ]
-}
-
-Important rules:
-- Always return valid JSON only, no markdown code blocks or extra text
-- Generate a slug from the project name if not explicitly provided
-- Choose appropriate architecture based on the prompt (landing for simple sites, ecommerce for shops, marketplace for multi-vendor)
-- Select a primary color that matches the theme/industry
-- Choose a Google Font that fits the design style
-- Generate meaningful section content based on the user's prompt
-- Ensure all IDs are unique and follow a consistent pattern`;
-
-/**
- * Generates a WebsiteSpec from a user prompt using Ollama.
+ * Converts a natural language prompt into a typed `WebsiteSpec` using the Ollama API.
  *
- * @param prompt - The user's natural language prompt describing the website
- * @param config - Optional Ollama configuration (baseUrl, model)
- * @returns A Promise that resolves to a WebsiteSpec
- * @throws Error if the Ollama API call fails or the response is invalid
+ * This function:
+ * 1. Merges the provided config with defaults (base URL, model, timeout)
+ * 2. Builds a system-primed prompt for generating a WebsiteSpec JSON payload
+ * 3. Calls Ollama's `/api/generate` endpoint and normalizes different response shapes
+ * 4. Cleans up Markdown code fences / extra text and parses the JSON into a `WebsiteSpec`
+ * 5. Validates the resulting spec and backfills the `project.slug` if missing
+ *
+ * It throws rich, human-readable errors for API failures, timeouts, connectivity issues,
+ * invalid JSON, or structurally invalid specs so that callers can surface actionable messages.
+ *
+ * @param {string} prompt - The user's natural language description of the website to generate.
+ * @param {OllamaConfig} [config] - Optional overrides for Ollama base URL, model, and timeout.
+ * @returns {Promise<WebsiteSpec>} A validated WebsiteSpec ready to be used by generators.
+ *
+ * @throws {Error} If the Ollama API call fails, times out, or returns an invalid/unsupported format.
  */
-export async function promptToSpec(
+export const promptToSpec = async (
   prompt: string,
   config: OllamaConfig = {}
-): Promise<WebsiteSpec> {
-  const { baseUrl, model } = { ...DEFAULT_CONFIG, ...config };
+): Promise<WebsiteSpec> => {
+  // Merge caller config with defaults (e.g., base URL, model)
+  const { baseUrl, model } = { ...DEFAULT_OLLAMA_CONFIG, ...config };
 
-  const fullPrompt = `${SYSTEM_PROMPT}\n\nUser prompt: ${prompt}\n\nGenerate the WebsiteSpec JSON:`;
+  // Compose the full system prompt used to instruct Ollama to produce a WebsiteSpec JSON payload
+  const fullPrompt = `${WEBSITE_SPEC_SYSTEM_PROMPT}\n\nUser prompt: ${prompt}\n\nGenerate the WebsiteSpec JSON:`;
 
   try {
-    console.log(`[Ollama] Connecting to ${baseUrl} with model: ${model}`);
-
-    // Add timeout to prevent hanging requests
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), DEFAULT_TIMEOUT);
+
+    // Enforce a hard timeout; aborts the fetch if Ollama takes too long
+    const timeoutId = setTimeout(
+      () => controller.abort(),
+      DEFAULT_OLLAMA_TIMEOUT
+    );
 
     const response = await fetch(`${baseUrl}/api/generate`, {
       method: "POST",
@@ -107,8 +60,6 @@ export async function promptToSpec(
 
     clearTimeout(timeoutId);
 
-    console.log(`[Ollama] Response status: ${response.status}`);
-
     if (!response.ok) {
       const errorText = await response.text().catch(() => "");
       throw new Error(
@@ -118,19 +69,20 @@ export async function promptToSpec(
       );
     }
 
+    // Ollama responses can be either raw strings, an object with a `response` field,
+    // or directly a JSON object compatible with WebsiteSpec. Normalize all shapes.
     const data = await response.json();
 
-    // Ollama returns { response: "...", done: true } format
+    console.log("🚀 ~ data:", data);
+
     let jsonText: string;
     if (typeof data === "string") {
       jsonText = data;
     } else if (data.response && typeof data.response === "string") {
       jsonText = data.response;
     } else if (typeof data === "object" && !data.response) {
-      // If the response is already a parsed object, use it directly
       const spec = data as WebsiteSpec;
       if (spec.pages && Array.isArray(spec.pages)) {
-        // Ensure project slug is generated if missing
         if (spec.project && !spec.project.slug && spec.project.name) {
           spec.project.slug = spec.project.name
             .toString()
@@ -148,16 +100,15 @@ export async function promptToSpec(
       throw new Error("Unexpected response format from Ollama API");
     }
 
-    // Extract JSON from response (handle cases where LLM wraps it in markdown)
+    // Trim and strip common Markdown code fences often present in LLM responses
     let jsonString = jsonText.trim();
 
-    // Remove markdown code blocks if present
     jsonString = jsonString
       .replace(/^```json\s*/i, "")
       .replace(/^```\s*/i, "")
       .replace(/\s*```$/i, "");
 
-    // Try to extract JSON object if there's extra text
+    // Try to isolate the first JSON object in case there is leading/trailing commentary
     const jsonMatch = jsonString.match(/\{[\s\S]*\}/);
     if (jsonMatch) {
       jsonString = jsonMatch[0];
@@ -165,14 +116,14 @@ export async function promptToSpec(
 
     const spec = JSON.parse(jsonString) as WebsiteSpec;
 
-    // Validate required fields
+    // Basic structural validation of the generated spec (pages are mandatory)
     if (!spec.pages || !Array.isArray(spec.pages) || spec.pages.length === 0) {
       throw new Error(
         "Invalid spec: pages array is required and must not be empty"
       );
     }
 
-    // Ensure project slug is generated if missing
+    // Backfill a URL-friendly project slug if the model omitted it
     if (spec.project && !spec.project.slug && spec.project.name) {
       spec.project.slug = spec.project.name
         .toString()
@@ -182,6 +133,7 @@ export async function promptToSpec(
         .replace(/^-+|-+$/g, "");
     }
 
+    // Log the parsed spec for debugging/troubleshooting purposes
     console.log("🚀 ~ spec:", spec);
 
     return spec;
@@ -192,13 +144,10 @@ export async function promptToSpec(
       );
     }
     if (error instanceof Error) {
-      console.error(`[Ollama] Error: ${error.name} - ${error.message}`);
-
-      // Handle fetch errors (network, timeout, etc.)
       if (error.name === "AbortError") {
         throw new Error(
           `Ollama API request timed out after ${
-            DEFAULT_TIMEOUT / 1000
+            DEFAULT_OLLAMA_TIMEOUT / 1000
           } seconds. The model "${model}" might be slow or Ollama might not be responding. Check: 1) Ollama is running (ollama serve), 2) Model is available (ollama list), 3) Try a smaller/faster model.`
         );
       }
@@ -215,4 +164,4 @@ export async function promptToSpec(
     }
     throw new Error("Unknown error occurred while calling Ollama API");
   }
-}
+};

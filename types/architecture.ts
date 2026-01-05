@@ -4,12 +4,12 @@
 export type ExportStyle = "default" | "named";
 
 /**
- * Architecture preset for organizing website components.
+ * Architecture preset for organizing generated website components.
  */
 export type ArchitecturePreset = "landing" | "ecommerce" | "marketplace";
 
 /**
- * Architecture strategy for component organization.
+ * Architecture strategy for generated website component organization.
  */
 export type ArchitectureStrategy = {
   importPath: (component: string) => string;

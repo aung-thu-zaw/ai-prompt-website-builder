@@ -5,12 +5,22 @@ import { generate } from "@/engine/generators/project-generator";
 import { WebsiteSpec } from "@/types/website-spec";
 import { promptToSpec } from "@/engine/runtime/ollama";
 
-// Increase timeout for Ollama API calls (in seconds)
-// Default is 10s, we need more for LLM generation
-export const maxDuration = 300; // 5 minutes
-
-export async function POST(req: Request) {
-  const { prompt } = await req.json();
+/**
+ * API route that generates a Next.js project ZIP from a natural language prompt.
+ *
+ * This endpoint:
+ * 1. Validates the incoming prompt payload
+ * 2. Uses Ollama to generate a `WebsiteSpec` from the prompt
+ * 3. Runs the project generator to scaffold a Next.js project
+ * 4. Returns the generated project as a ZIP file download
+ *
+ * Errors are returned as JSON with appropriate HTTP status codes, never thrown to the client.
+ *
+ * @param {Request} request - The incoming HTTP request containing a JSON body with a `prompt` field.
+ * @returns {Promise<NextResponse>} A response streaming either a ZIP file or a JSON error object.
+ */
+export async function POST(request: Request) {
+  const { prompt } = await request.json();
 
   if (!prompt || typeof prompt !== "string" || prompt.trim().length === 0) {
     return NextResponse.json(
@@ -20,10 +30,11 @@ export async function POST(req: Request) {
   }
 
   let spec: WebsiteSpec;
+
   try {
+    // Convert natural language prompt into a structured WebsiteSpec using Ollama
     spec = await promptToSpec(prompt);
   } catch (error) {
-    console.error("Failed to generate spec from prompt:", error);
     return NextResponse.json(
       {
         error: "Failed to generate website specification",
@@ -33,7 +44,7 @@ export async function POST(req: Request) {
     );
   }
 
-  // Validate that project exists (generate function will also check, but we need it for the filename)
+  // Ensure the generated spec contains the required project metadata
   if (!spec.project) {
     return NextResponse.json(
       { error: "Generated specification is missing project configuration" },
@@ -42,6 +53,7 @@ export async function POST(req: Request) {
   }
 
   try {
+    // Generate the Next.js project (files + ZIP archive) from the WebsiteSpec
     await generate(spec);
   } catch (error) {
     console.error("Failed to generate project:", error);
@@ -54,6 +66,7 @@ export async function POST(req: Request) {
     );
   }
 
+  // Resolve project slug (fallback is mainly for defensive safety)
   const projectSlug = spec.project.slug || "generated-site";
   const zipPath = path.join(process.cwd(), "output", `${projectSlug}.zip`);
 
@@ -64,6 +77,7 @@ export async function POST(req: Request) {
     );
   }
 
+  // Read the generated ZIP into memory and return as a binary HTTP response
   const fileBuffer = fs.readFileSync(zipPath);
   const fileName = `${projectSlug}.zip`;
 

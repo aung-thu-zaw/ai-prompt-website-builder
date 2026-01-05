@@ -4,13 +4,23 @@ import path from "path";
 import { EXCLUDE_DIRS, EXCLUDE_FILES } from "@/config/file-exclusions";
 
 /**
- * Creates a zip archive of a directory.
+ * Creates a ZIP archive from a directory and writes it to the specified output path.
  *
- * @param sourceDir - The directory to zip.
- * @param outputPath - The path where the zip file should be created.
- * @returns Promise that resolves when the zip is created.
+ * Recursively traverses the entire `sourceDir`, adding all files and subdirectories
+ * (except those listed in `EXCLUDE_DIRS` and `EXCLUDE_FILES`) into a ZIP file using
+ * the highest compression level.
+ *
+ * The zipped archive is written to `outputPath`. The returned promise resolves when the
+ * archive has been successfully written, or rejects if an error occurs.
+ *
+ * @param {string} sourceDir - The absolute or relative path to the directory to be archived.
+ * @param {string} outputPath - The absolute or relative path where the ZIP file will be created.
+ * @returns {Promise<void>} Resolves upon successful archive finalization, rejects on failure.
+ *
+ * @example
+ *   await zipDirectory("./project", "./project.zip");
  */
-export const zipDirectory = (
+export const createZipArchiveFromDirectory = (
   sourceDir: string,
   outputPath: string
 ): Promise<void> => {
@@ -28,11 +38,16 @@ export const zipDirectory = (
 
     archive.pipe(output);
 
+    /**
+     * Recursively adds all files and directories (excluding excluded entries) from the given directory to the archive.
+     *
+     * @param {string} dir - The current directory to add.
+     * @param {string} basePath - The base path to prepend for each relative archive entry.
+     */
     const addDirectory = (dir: string, basePath: string = "") => {
       const files = fs.readdirSync(dir);
 
       files.forEach((file) => {
-        // Skip excluded directories and files
         if (EXCLUDE_DIRS.includes(file) || EXCLUDE_FILES.includes(file)) {
           return;
         }
