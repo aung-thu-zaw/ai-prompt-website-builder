@@ -9,7 +9,6 @@ const spec = JSON.parse(fs.readFileSync(specPath, "utf-8"));
 (async () => {
   await generate(spec);
 
-  const projectSlug = spec.project?.slug || "generated-project";
+  const projectSlug = spec.slug || "generated-project";
   console.log(`✅ Project generated successfully in output/${projectSlug}/`);
 })();
-

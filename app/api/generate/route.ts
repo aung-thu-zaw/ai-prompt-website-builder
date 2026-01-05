@@ -44,10 +44,10 @@ export async function POST(request: Request) {
     );
   }
 
-  // Ensure the generated spec contains the required project metadata
-  if (!spec.project) {
+  // Ensure the generated spec contains the required website metadata
+  if (!spec.name || !spec.slug) {
     return NextResponse.json(
-      { error: "Generated specification is missing project configuration" },
+      { error: "Generated specification is missing website name or slug" },
       { status: 500 }
     );
   }
@@ -67,7 +67,7 @@ export async function POST(request: Request) {
   }
 
   // Resolve project slug (fallback is mainly for defensive safety)
-  const projectSlug = spec.project.slug || "generated-site";
+  const projectSlug = spec.slug || "generated-site";
   const zipPath = path.join(process.cwd(), "output", `${projectSlug}.zip`);
 
   if (!fs.existsSync(zipPath)) {

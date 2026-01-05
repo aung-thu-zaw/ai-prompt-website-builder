@@ -5,10 +5,9 @@ export const WEBSITE_SPEC_SYSTEM_PROMPT = `You are a website specification gener
 
 The specification must follow this exact structure:
 {
-  "project": {
-    "name": "string (website name)",
-    "slug": "string (URL-friendly identifier, lowercase with hyphens)"
-  },
+  "name": "string (website name)",
+  "slug": "string (URL-friendly identifier, lowercase with hyphens)",
+  "description": "string (optional, brief description of the website)",
   "architecture": "landing" | "ecommerce" | "marketplace",
   "theme": {
     "primaryColor": "string (hex color code, e.g., #6366f1)",
@@ -17,6 +16,7 @@ The specification must follow this exact structure:
   "pages": [
     {
       "id": "string (unique page identifier)",
+      "name": "string (page name, e.g., Home, About)",
       "route": "string (URL route, e.g., /)",
       "sections": [
         {
@@ -49,9 +49,10 @@ Important rules:
 - Always return valid JSON only, no markdown code blocks or extra text
 - The "content" field must always be an object (never a bare array). For list sections,
 - use named properties: "items" (features) and "plans" (pricing).
-- Generate a slug from the project name if not explicitly provided
+- Generate a slug from the name if not explicitly provided
 - Choose appropriate architecture based on the prompt (landing for simple sites, ecommerce for shops, marketplace for multi-vendor)
 - Select a primary color that matches the theme/industry
 - Choose a Google Font that fits the design style
 - Generate meaningful section content based on the user's prompt
-- Ensure all IDs are unique and follow a consistent pattern`;
+- Ensure all IDs are unique and follow a consistent pattern
+- Include a descriptive "name" field for each page`;

@@ -14,7 +14,7 @@ import { WEBSITE_SPEC_SYSTEM_PROMPT } from "@/engine/prompts/website-spec";
  * 2. Builds a system-primed prompt for generating a WebsiteSpec JSON payload
  * 3. Calls Ollama's `/api/generate` endpoint and normalizes different response shapes
  * 4. Cleans up Markdown code fences / extra text and parses the JSON into a `WebsiteSpec`
- * 5. Validates the resulting spec and backfills the `project.slug` if missing
+ * 5. Validates the resulting spec and backfills the `slug` if missing
  *
  * It throws rich, human-readable errors for API failures, timeouts, connectivity issues,
  * invalid JSON, or structurally invalid specs so that callers can surface actionable messages.
@@ -83,8 +83,9 @@ export const promptToSpec = async (
     } else if (typeof data === "object" && !data.response) {
       const spec = data as WebsiteSpec;
       if (spec.pages && Array.isArray(spec.pages)) {
-        if (spec.project && !spec.project.slug && spec.project.name) {
-          spec.project.slug = spec.project.name
+        // Backfill slug from name if missing
+        if (!spec.slug && spec.name) {
+          spec.slug = spec.name
             .toString()
             .trim()
             .toLowerCase()
@@ -123,9 +124,9 @@ export const promptToSpec = async (
       );
     }
 
-    // Backfill a URL-friendly project slug if the model omitted it
-    if (spec.project && !spec.project.slug && spec.project.name) {
-      spec.project.slug = spec.project.name
+    // Backfill a URL-friendly slug if the model omitted it
+    if (!spec.slug && spec.name) {
+      spec.slug = spec.name
         .toString()
         .trim()
         .toLowerCase()

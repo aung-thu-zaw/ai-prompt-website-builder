@@ -1,8 +1,7 @@
 {
-    "project": {
-        "name": "AI Powered Website Builder",
-        "slug": "ai-powered-website-builder"
-    },
+    "name": "AI Powered Website Builder",
+    "slug": "ai-powered-website-builder",
+    "description": "A modern, professional website builder leveraging AI to generate high-quality, production-ready websites from a simple user prompt.",
     "architecture": "landing",
     "theme": {
         "primaryColor": "#ff452c",
@@ -10,7 +9,8 @@
     },
     "pages": [
         {
-            "id": "page_home",
+            "id": "home",
+            "name": "Home",
             "route": "/",
             "sections": [
                 {
@@ -18,8 +18,8 @@
                     "kind": "hero",
                     "variant": "split",
                     "content": {
-                        "title": "Build faster with AI",
-                        "subtitle": "Generate production-ready websites from a single prompt"
+                        "title": "Build Professional Websites with AI",
+                        "subtitle": "Create and deploy production-quality websites in minutes using our intelligent, prompt-driven builder. No coding required."
                     }
                 },
                 {
